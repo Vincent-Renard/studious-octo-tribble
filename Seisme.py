@@ -5,10 +5,11 @@ import json
 class Seisme(object):
     """Seisme bean"""
 
-    def __init__(self,name):
+    def __init__(self):
+        self.id=""
         self.date_time_local=date.today()
         self.date_time_UTC=date.today()
-        self.name = name
+
         self.country=''
         self.nearest_cities={}
         self.longitude=0.0

@@ -4,7 +4,8 @@ from Seisme import Seisme
 from datetime import date
 
 if __name__ == '__main__':
-    s = Seisme("Hosso")
+    s = Seisme()
+    s.id = "Hosso"
 
 
     print(s.to_JSON())
