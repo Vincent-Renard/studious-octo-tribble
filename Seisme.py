@@ -20,20 +20,21 @@ class Seisme(object):
         self.type=''
 
 
-    
-    def from_JSON(self,payload):
+
+    def from_JSON(self,thing):
+        payload=json.load(thing,encoding='utf8')
         self.id=payload["id"]
-        self.date_time_local=payload.["date_time_local"]
-        self.date_time_UTC=payload.["date_time_UTC"]
-        self.city=payload.["city"]
-        self.country=payload.["country"]
+        self.date_time_local=payload["date_time_local"]
+        self.date_time_UTC=payload["date_time_UTC"]
+        self.city=payload["city"]
+        self.country=payload["country"]
         self.nearest_cities={payload["nearest_cities"][c] for c in payload["nearest_cities"]}
-        self.longitude=payload.["longitude"]
-        self.latitude=payload.["latitude"]
-        self.depth=payload.["depth"]
-        self.magnitude=payload.["magnitude"]
-        self.validation=payload.["validation"]
-        self.type=payload.["type"]
+        self.longitude=float(payload["longitude"])
+        self.latitude=float(payload["latitude"])
+        self.depth=int(payload["depth"])
+        self.magnitude=float(payload["magnitude"])
+        self.validation=payload["validation"]
+        self.type=payload["type"]
 
 
     def add_near_city(city,distance):
@@ -47,4 +48,4 @@ class Seisme(object):
         if isinstance(o,time):
             return "{}:{}:{}".format(o.hour ,o.minute,o.second)
     def to_JSON(self):
-        return json.dumps(self.__dict__,default = self.custom_converter, sort_keys=False, indent=4)
+        return json.dumps(self.__dict__,default = self.custom_converter, ensure_ascii=False,sort_keys=False, indent=4)
