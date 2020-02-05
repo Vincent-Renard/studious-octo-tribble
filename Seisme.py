@@ -7,7 +7,7 @@ class Seisme(object):
 
     def __init__(self):
         self.id=""
-        self.date_time_local=date.today()
+        self.date_time_local=datetime.today()
         self.date_time_UTC=date.today()
         self.city=''
         self.country=''
