@@ -16,23 +16,36 @@ class Seisme(object):
         self.latitude=0.0
         self.depth=0
         self.magnitude=0.0
+        self.magnitude_unit=""
         self.validation=False
         self.type=''
 
 
 
+
+    def _date_from_str(self,s):
+        s=s.split(' ')
+        d=s[0].split('/')
+        h=s[1].split(':')
+
+        date_s=datetime(int(d[2]),int(d[1]),int(d[0]),int(h[0]),int(h[1]),int(h[2]))
+
+        return date_s
     def from_JSON(self,thing):
-        payload=json.load(thing,encoding='utf8')
+        payload=json.loads(thing,encoding='utf8')
         self.id=payload["id"]
-        self.date_time_local=payload["date_time_local"]
-        self.date_time_UTC=payload["date_time_UTC"]
+        self.date_time_local=self._date_from_str(payload["date_time_local"])
+        self.date_time_UTC=self._date_from_str(payload["date_time_UTC"])
         self.city=payload["city"]
         self.country=payload["country"]
-        self.nearest_cities={payload["nearest_cities"][c] for c in payload["nearest_cities"]}
+        #self.nearest_cities={payload["nearest_cities"][c] for c in payload["nearest_cities"]}
         self.longitude=float(payload["longitude"])
         self.latitude=float(payload["latitude"])
         self.depth=int(payload["depth"])
+
         self.magnitude=float(payload["magnitude"])
+        self.magnitude_unit=payload["magnitude_unit"]
+
         self.validation=payload["validation"]
         self.type=payload["type"]
 
@@ -48,4 +61,6 @@ class Seisme(object):
         if isinstance(o,time):
             return "{}:{}:{}".format(o.hour ,o.minute,o.second)
     def to_JSON(self):
-        return json.dumps(self.__dict__,default = self.custom_converter, ensure_ascii=False,sort_keys=False, indent=4)
+        j=json.dumps(self.__dict__,default = self.custom_converter, ensure_ascii=False,sort_keys=False, indent=4)
+        #print(j)
+        return j

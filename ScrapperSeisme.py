@@ -5,6 +5,7 @@ from time import sleep
 import requests,os,threading,random,json
 from bs4 import BeautifulSoup
 from sys import argv
+from os import path
 import multiprocessing as mp
 from Seisme import Seisme
 
@@ -14,13 +15,22 @@ class ScrapperSeisme:
     def __init__(self, base_url,nb_threads=4,save_path=None):
         self._base_url = base_url
         self._nthreads=nb_threads
-        if save_path is None :
-            self._pool=dict()
-        else:
+        self._save_path=save_path
+        self._pool=dict()
+        if save_path is not None:
+            self._deserialize()
 
-            # from json
-            pass
 
+    
+    def _deserialize(self):
+        if path.exists(self._save_path):
+            with open(self._save_path,"r") as f_in:
+                    f=f_in.read()
+                    for seisme_serialized in f.split(';')[:-1]:
+                        s=Seisme()
+                        s.from_JSON(seisme_serialized)
+                        #print(s.id)
+                        self._pool[s.id]=s
 
     def avg(self,list):
         if (len(list)):
@@ -33,6 +43,7 @@ class ScrapperSeisme:
         Retrouve les bornes contenant la page pivot
         url: url de la page-mère
         """
+
         w = self.get_weight_page(url,1)
         weights ,lp= [],[]
         p=1
@@ -76,14 +87,11 @@ class ScrapperSeisme:
 
         return p
 
-    def get_weight_page(self,path,n):
-        return len(self.parse_content(path,n).getText())
+    def get_weight_page(self,url,n):
+        return len(self.parse_content(url+str(n)).getText())
 
-    def parse_content(self,uri,nombre=None):
-
-        if nombre is not None:
-            uri += str(nombre)
-        requete = requests.get(uri)
+    def parse_content(self,url):
+        requete = requests.get(url)
         cont = requete.content
         soup = BeautifulSoup(cont, features="html.parser")
 
@@ -101,7 +109,7 @@ class ScrapperSeisme:
             l=l//2
             r=self.oracle(p)
             i+=1
-            print(i,p,r)
+            #print(i,p,r)
 
 
 
@@ -124,23 +132,21 @@ class ScrapperSeisme:
     def get_seisms(self,page):
         content_page = self.parse_content(page)
         seismes = []
-
         trs = content_page.find_all('tr')
         i=0
         for record in trs[1:]:
-
-            s = Seisme()
             try:
                 m = record.find("a")
                 id = str(m).split('\"')[1].split('/')[2]
-                i+=1
-                s.id=id
-                img = record.find("img")
-                country = img.get('alt')
-                s.country=country
-                event = self.get_event(s.id)
-                s=self.read_event(event,s)
-                self._pool[s.id]=s
+                if id not in self._pool:
+                    s = Seisme()
+                    s.id=id
+                    img = record.find("img")
+                    country = img.get('alt')
+                    s.country=country
+                    event = self.get_event(s.id)
+                    s=self.read_event(event,s)
+                    self._pool[s.id]=s
 
             except IndexError as e:
                 pass
@@ -149,6 +155,7 @@ class ScrapperSeisme:
     def get_event(self,id):
 
         p="https://renass.unistra.fr/evenements/"+id
+
         requete = requests.get(p)
         cont = requete.content
         soup = BeautifulSoup(cont, features="html.parser")
@@ -175,16 +182,18 @@ class ScrapperSeisme:
             #4 : Profondeur
             pro1 = (str(trs[4].getText()).split('\n')[2])
             pro = pro1.split(' ')
-            unit = pro[1]
+
             val_depth=int(pro[0])
 
             #print(pro)
             seisme.depth=val_depth
             #5 : magnitude
             magnitude=str(trs[5].getText()).split('\n')[2]
-            seisme.magnitude=magnitude
+            magnitude=magnitude.split('\xa0')
+
+            seisme.magnitude=magnitude[0]
+            seisme.magnitude_unit= magnitude[1]
             #print(magnitude)
-            mag=magnitude.split()[1]
             #6 : Type
             seisme.type=str(trs[6].getText()).split('\n')[2]
             # 8: ville
@@ -194,10 +203,10 @@ class ScrapperSeisme:
 
 
     def start(self,nb_pages=0):
-        d,f=find_borders(path)
+        d,f=self.find_borders(self._base_url)
 
         #print(d,f)
-        derniere_page=self.find_first_page(path,d,f)
+        derniere_page=self.find_first_page(self._base_url,d,f)
         print(derniere_page)
         tailles = list()
         thrds = []
@@ -208,21 +217,22 @@ class ScrapperSeisme:
         for p in range(1,np,self._nthreads):
             for t_i in range(self._nthreads):
                 print('page : ',p+t_i)
-                t = threading.Thread(target=self.get_seisms,args=(path+str(p+t_i),))
+                t = threading.Thread(target=self.get_seisms,args=(self._base_url+str(p+t_i),))
                 t.start()
                 thrds.append(t)
             for th in thrds:
                 th.join()
             thrds.clear()
-        self.stop()
-    def stop(self):
-        """
-        with open(save_path,"w") as out:
-
+        self._stop()
+    def apply(self,fun):
+        r = {}
+        for sid in self._pool:
+            s=self._pool[sid]
+            s=fun(s)
+            r[sid]=s
+        self._pool=r
+        self._stop()
+    def _stop(self):
+        with open(self._save_path,"w") as out:
             for s in self._pool:
-                print(s)
-                out.write(self._pool[s].to_JSON()+'\n')
-        """
-        print(len(self._pool))
-        #
-        return json.dumps([self._pool[s].to_JSON() for s in self._pool], ensure_ascii=False,sort_keys=False, indent=4)
+                out.write(self._pool[s].to_JSON()+';\n')
