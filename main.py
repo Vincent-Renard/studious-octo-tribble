@@ -1,12 +1,8 @@
 #! /usr/local/bin/pypy3
 # -*-coding:utf-8 -*
-import requests,os,threading,random
-from datetime import datetime,date,time
-from bs4 import BeautifulSoup
-from sys import argv
-import multiprocessing as mp
-from Seisme import Seisme
+
 from ScrapperSeisme import ScrapperSeisme
+
 
 
 if __name__ == '__main__':

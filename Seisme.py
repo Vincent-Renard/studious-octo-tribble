@@ -24,10 +24,16 @@ class Seisme(object):
 
 
     def _date_from_str(self,s):
-        s=s.split(' ')
-        d=s[0].split('/')
-        h=s[1].split(':')
 
+        if ' - ' in s:
+            s=s.split(' - ')
+            d=s[0].split('/')
+            h=s[1].split(':')
+        else:
+            #print(s)
+            s=s.split(' ')
+            d=s[0].split('/')
+            h=s[1].split(':')
         date_s=datetime(int(d[2]),int(d[1]),int(d[0]),int(h[0]),int(h[1]),int(h[2]))
 
         return date_s
