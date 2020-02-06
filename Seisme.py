@@ -20,23 +20,13 @@ class Seisme(object):
         self.validation=False
         self.type=''
 
-
-
-
     def _date_from_str(self,s):
-
-        if ' - ' in s:
-            s=s.split(' - ')
-            d=s[0].split('/')
-            h=s[1].split(':')
-        else:
-            #print(s)
-            s=s.split(' ')
-            d=s[0].split('/')
-            h=s[1].split(':')
+        s=s.split(' - ')
+        d=s[0].split('/')
+        h=s[1].split(':')
         date_s=datetime(int(d[2]),int(d[1]),int(d[0]),int(h[0]),int(h[1]),int(h[2]))
-
         return date_s
+
     def from_JSON(self,thing):
         payload=json.loads(thing,encoding='utf8')
         self.id=payload["id"]
@@ -66,7 +56,6 @@ class Seisme(object):
             return "{}/{}/{}".format(o.day, o.month,o.year)
         if isinstance(o,time):
             return "{}:{}:{}".format(o.hour ,o.minute,o.second)
+
     def to_JSON(self):
-        j=json.dumps(self.__dict__,default = self.custom_converter, ensure_ascii=False,sort_keys=False, indent=4)
-        #print(j)
-        return j
+        return json.dumps(self.__dict__,default = self.custom_converter, ensure_ascii=False,sort_keys=False, indent=4)

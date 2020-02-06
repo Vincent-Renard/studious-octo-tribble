@@ -2,7 +2,7 @@
 # -*-coding:utf-8 -*
 from time import sleep
 
-import requests,threading,json
+import requests,threading,json,operator
 from bs4 import BeautifulSoup
 from os import path
 import multiprocessing as mp
@@ -20,14 +20,14 @@ class ScrapperSeisme:
         if save_path is not None:
             self.__deserialize()
         print(len(self._pool))
-
+        self.__stop()
 
 
     def __deserialize(self):
         if path.exists(self._save_path):
             with open(self._save_path,"r") as f_in:
                     f=f_in.read()
-                    for seisme_serialized in f.split(';')[:-1]:
+                    for seisme_serialized in tqdm(f.split(';')[:-1]):
                         s=Seisme()
                         s.from_JSON(seisme_serialized)
                         #print(s.id)
@@ -202,8 +202,14 @@ class ScrapperSeisme:
         self._pool=r
 
         self.__stop()
+    def __sort_pool(self):
+        sc = dict(self._pool)
+        self._pool={}
+        for c in sorted(sc.values(), key=lambda s : s.date_time_UTC):
+            self.__add(c)
+
     def __stop(self):
-        self._pool = sorted(self._pool.items(), key=lambda x: x.date_time_UTC)
+        self.__sort_pool()
         with open(self._save_path,"w") as out:
             for s in self._pool:
                 out.write(self._pool[s].to_JSON()+';\n')
