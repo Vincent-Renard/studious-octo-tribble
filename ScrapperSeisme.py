@@ -100,6 +100,7 @@ class ScrapperSeisme:
 
 
     def get_seisms(self,page):
+        page=self.__base_url+str(page)
         content_page = self.__parse_content(page)
         seismes = []
         trs = content_page.find_all('tr')
@@ -121,8 +122,8 @@ class ScrapperSeisme:
 
             except IndexError as e:
                 pass
+        self.__save()#TOREM
 
-        return seismes
     def __get_event(self,id):
 
         p="https://renass.unistra.fr/evenements/"+id
@@ -173,8 +174,10 @@ class ScrapperSeisme:
             return seisme
 
     def __add(self,seisme):
+        #print(type(seisme))
+        #print(seisme.id)
         self.__pool[seisme.id]=seisme
-        
+
     def start(self,nb_pages=0,update=True):
         d,f=self.__find_borders(self.__base_url)
         if not update: self.__pool={}
@@ -191,7 +194,7 @@ class ScrapperSeisme:
             np=nb_pages
         for p in tqdm(range(1,np,self.__nthreads)):
             for t_i in range(self.__nthreads):
-                t = threading.Thread(target=self.get_seisms,args=(self.__base_url+str(p+t_i),))
+                t = threading.Thread(target=self.get_seisms,args=(p+t_i,))
                 t.start()
                 thrds.append(t)
             for th in thrds:
