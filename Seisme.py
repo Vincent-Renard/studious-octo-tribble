@@ -30,7 +30,7 @@ class Seisme(object):
 
     def set_date_local(self,d):
         self.date_time_local=self.__date_from_str(d)
-        
+
     def set_date_UTC(self,d):
         self.date_time_UTC=self.__date_from_str(d)
 

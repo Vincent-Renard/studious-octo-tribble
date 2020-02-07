@@ -11,7 +11,7 @@ from Seisme import Seisme
 from tqdm import tqdm
 
 class ScrapperSeisme:
-    """ScrapperSeisme : Scrapper for renass unistra / seismes """
+    """ScrapperSeisme : Scrapper for renass / seismes """
     ## TODO: Mettre même patern dans json pour les date heures
     def __init__(self, base_url,nb_threads=4,save_path=None):
         self.__base_url = base_url
@@ -45,20 +45,7 @@ class ScrapperSeisme:
         url: url de la page-mère
         """
 
-        w = self.__get_weight_page(url,1)
-        weights ,lp= [],[]
-        p=1
-        while (not( w < self.__avg(weights)/2 )):
-            lp.append(p)
-            w = self.__get_weight_page(url,p)
-            #print(p,w)
-            weights.append(w)
-            if p > 1:
-                p*=2
-            else:
-                p=2
-        r = lp[-2:]
-        return r[0] ,r[1]
+
 
     def __page_compare(self,val_in,val_out,url,n_page):
         val_p=self.__get_weight_page(url,n_page)
@@ -72,19 +59,34 @@ class ScrapperSeisme:
 
 
 
-    def __find_first_page(self,url,strt,end):
+    def __find_first_page(self):
+        url=self.__base_url
+        w = self.__get_weight_page(url,1)
+        weights ,lp= [],[]
+        p=1
+        while (not( w < self.__avg(weights)/2 )):
+            lp.append(p)
+            w = self.__get_weight_page(url,p)
+            #print(p,w)
+            weights.append(w)
+            if p > 1:
+                p*=2
+            else:
+                p=2
+        r = lp[-2:]
+        strt=r[0]
+        end=r[1]
+
         val_out=self.__get_weight_page(url,end)
         val_in=self.__get_weight_page(url,strt)
         p=end-strt
         r=self.__page_compare(val_in,val_out,url,p)
         i=0
-
         while r!=0:
             p=p+r*end
             end=end//2
             r=self.__page_compare(val_in,val_out,url,p)
             i+=1
-
 
         return p
 
@@ -95,16 +97,13 @@ class ScrapperSeisme:
         requete = requests.get(url)
         cont = requete.content
         soup = BeautifulSoup(cont, features="html.parser")
-
         return soup
-
 
     def get_seisms(self,page):
         page=self.__base_url+str(page)
         content_page = self.__parse_content(page)
         seismes = []
         trs = content_page.find_all('tr')
-        i=0
         for record in trs[1:]:
             try:
                 m = record.find("a")
@@ -115,14 +114,10 @@ class ScrapperSeisme:
                     img = record.find("img")
                     country = img.get('alt')
                     s.country=country
-                    event = self.__get_event(s.id)
-                    s=self.__read_event(event,s)
+                    s=self.__read_event(s)
                     self.__add(s)
-
-
             except IndexError as e:
                 pass
-        self.__save()#TOREM
 
     def __get_event(self,id):
 
@@ -135,8 +130,8 @@ class ScrapperSeisme:
         return soup
 
 
-    def __read_event(self,event,seisme):
-
+    def __read_event(self,seisme):
+            event = self.__get_event(seisme.id)
             valid = event.find_all('div',{"class": "alert alert-error"})
             if(len(valid)>0):
                 seisme.validation=False
@@ -178,29 +173,24 @@ class ScrapperSeisme:
         #print(seisme.id)
         self.__pool[seisme.id]=seisme
 
-    def start(self,nb_pages=0,update=True):
-        d,f=self.__find_borders(self.__base_url)
-        if not update: self.__pool={}
-        #print(d,f)
-        derniere_page=self.__find_first_page(self.__base_url,d,f)
-        #derniere_page=1976
-        print(derniere_page)
-        tailles = list()
-        thrds = []
+    def start(self,end_page=0,update=True):
 
-        if nb_pages==0:
-            np=derniere_page
-        else :
-            np=nb_pages
-        for p in tqdm(range(1,np,self.__nthreads)):
+        if not update: self.__pool={}
+        if end_page==0:
+            end_page=self.__find_first_page()
+            #end_page=1978
+            print(end_page)
+        thrds = []
+        for p in tqdm(range(1,end_page,self.__nthreads)):
             for t_i in range(self.__nthreads):
                 t = threading.Thread(target=self.get_seisms,args=(p+t_i,))
                 t.start()
                 thrds.append(t)
             for th in thrds:
                 th.join()
+            self.__save()
             thrds.clear()
-        self.__save()
+
 
     def apply(self,fun):
         r = {}
