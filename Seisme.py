@@ -20,18 +20,25 @@ class Seisme(object):
         self.validation=False
         self.type=''
 
-    def _date_from_str(self,s):
-        s=s.split(' - ')
+    def __date_from_str(self,s):
+        s=s.split(' ')
         d=s[0].split('/')
         h=s[1].split(':')
         date_s=datetime(int(d[2]),int(d[1]),int(d[0]),int(h[0]),int(h[1]),int(h[2]))
         return date_s
 
+
+    def set_date_local(self,d):
+        self.date_time_local=self.__date_from_str(d)
+        
+    def set_date_UTC(self,d):
+        self.date_time_UTC=self.__date_from_str(d)
+
     def from_JSON(self,thing):
         payload=json.loads(thing,encoding='utf8')
         self.id=payload["id"]
-        self.date_time_local=self._date_from_str(payload["date_time_local"])
-        self.date_time_UTC=self._date_from_str(payload["date_time_UTC"])
+        self.set_date_local(payload["date_time_local"])
+        self.set_date_UTC(payload["date_time_UTC"])
         self.city=payload["city"]
         self.country=payload["country"]
         #self.nearest_cities={payload["nearest_cities"][c] for c in payload["nearest_cities"]}
@@ -51,7 +58,7 @@ class Seisme(object):
 
     def custom_converter(self,o):
         if isinstance(o,datetime):
-            return "{}/{}/{} - {}:{}:{}".format(o.day, o.month,o.year,o.hour ,o.minute,o.second)
+            return "{}/{}/{} {}:{}:{}".format(o.day, o.month,o.year,o.hour ,o.minute,o.second)
         if isinstance(o,date):
             return "{}/{}/{}".format(o.day, o.month,o.year)
         if isinstance(o,time):

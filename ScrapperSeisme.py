@@ -3,6 +3,7 @@
 from time import sleep
 
 import requests,threading,json,operator
+from datetime import datetime
 from bs4 import BeautifulSoup
 from os import path
 import multiprocessing as mp
@@ -10,28 +11,26 @@ from Seisme import Seisme
 from tqdm import tqdm
 
 class ScrapperSeisme:
-    """docstring for ScrapperSeisme."""
-
+    """ScrapperSeisme : Scrapper for renass unistra / seismes """
+    ## TODO: Mettre même patern dans json pour les date heures
     def __init__(self, base_url,nb_threads=4,save_path=None):
-        self._base_url = base_url
-        self._nthreads=nb_threads
-        self._save_path=save_path
-        self._pool=dict()
+        self.__base_url = base_url
+        self.__nthreads=nb_threads
+        self.__save_path=save_path
+        self.__pool=dict()
+
         if save_path is not None:
             self.__deserialize()
-        print(len(self._pool))
-        self.__stop()
-
 
     def __deserialize(self):
-        if path.exists(self._save_path):
-            with open(self._save_path,"r") as f_in:
+        if path.exists(self.__save_path):
+            with open(self.__save_path,"r") as f_in:
                     f=f_in.read()
-                    for seisme_serialized in tqdm(f.split(';')[:-1]):
+                    for seisme_serialized in f.split(';')[:-1]:
                         s=Seisme()
                         s.from_JSON(seisme_serialized)
                         #print(s.id)
-                        self._pool[s.id]=s
+                        self.__pool[s.id]=s
 
 
     def __avg(self,list):
@@ -109,7 +108,7 @@ class ScrapperSeisme:
             try:
                 m = record.find("a")
                 id = str(m).split('\"')[1].split('/')[2]
-                if id not in self._pool:
+                if id not in self.__pool:
                     s = Seisme()
                     s.id=id
                     img = record.find("img")
@@ -136,11 +135,18 @@ class ScrapperSeisme:
 
 
     def __read_event(self,event,seisme):
+
+            valid = event.find_all('div',{"class": "alert alert-error"})
+            if(len(valid)>0):
+                seisme.validation=False
+            else:
+                seisme.validation=True
             trs = event.find_all('tr')
             #0 dateheure locale
-            seisme.date_time_local=str(trs[0].getText()).split('\n')[2]
+
+            seisme.set_date_local(str(trs[0].getText()).split('\n')[2])
             #1 dateheure UTC
-            seisme.date_time_UTC=str(trs[1].getText()).split('\n')[2]
+            seisme.set_date_UTC(str(trs[1].getText()).split('\n')[2])
             #2 : latitude
             la=str(trs[2].getText()).split('\n')[2][:-1]
             la=float(la)
@@ -167,50 +173,51 @@ class ScrapperSeisme:
             return seisme
 
     def __add(self,seisme):
-        #print(seisme.id)
-        self._pool[seisme.id]=seisme
-
-
-    def start(self,nb_pages=0):
-        d,f=self.__find_borders(self._base_url)
-
-        print(d,f)
-        derniere_page=self.__find_first_page(self._base_url,d,f)
+        self.__pool[seisme.id]=seisme
+        
+    def start(self,nb_pages=0,update=True):
+        d,f=self.__find_borders(self.__base_url)
+        if not update: self.__pool={}
+        #print(d,f)
+        derniere_page=self.__find_first_page(self.__base_url,d,f)
+        #derniere_page=1976
         print(derniere_page)
         tailles = list()
         thrds = []
+
         if nb_pages==0:
             np=derniere_page
         else :
             np=nb_pages
-        for p in tqdm(range(1,np,self._nthreads)):
-            for t_i in range(self._nthreads):
-                #print('page : ',p+t_i)
-                t = threading.Thread(target=self.get_seisms,args=(self._base_url+str(p+t_i),))
+        for p in tqdm(range(1,np,self.__nthreads)):
+            for t_i in range(self.__nthreads):
+                t = threading.Thread(target=self.get_seisms,args=(self.__base_url+str(p+t_i),))
                 t.start()
                 thrds.append(t)
             for th in thrds:
                 th.join()
             thrds.clear()
-        self.__stop()
+        self.__save()
+
     def apply(self,fun):
         r = {}
-        for sid in self._pool:
-            s=self._pool[sid]
+        for sid in self.__pool:
+            s=self.__pool[sid]
             s=fun(s)
             r[sid]=s
-        self._pool=r
+        self.__pool=r
+        self.__save()
 
-        self.__stop()
-    def __sort_pool(self):
-        sc = dict(self._pool)
-        self._pool={}
-        for c in sorted(sc.values(), key=lambda s : s.date_time_UTC):
+    def __sort__pool(self):
+
+        newpool = sorted(self.__pool.values(), key=lambda x: x.date_time_UTC)
+        self.__pool={}
+        for c in newpool:
             self.__add(c)
 
-    def __stop(self):
-        self.__sort_pool()
-        with open(self._save_path,"w") as out:
-            for s in self._pool:
-                out.write(self._pool[s].to_JSON()+';\n')
-        print(len(self._pool))
+    def __save(self):
+        self.__sort__pool()
+        with open(self.__save_path,"w") as out:
+            for s in self.__pool:
+                out.write(self.__pool[s].to_JSON()+';\n')
+        print(len(self.__pool))
