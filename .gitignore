@@ -133,3 +133,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 seismes.json
+seismes0.json
