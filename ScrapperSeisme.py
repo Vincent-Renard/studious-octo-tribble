@@ -28,7 +28,6 @@ class ScrapperSeisme:
                 for seisme_serialized in f.split(';')[:-1]:
                     s = Seisme()
                     s.from_JSON(seisme_serialized)
-                    # print(s.id)
                     self.__pool[s.id] = s
 
     @staticmethod
@@ -106,9 +105,6 @@ class ScrapperSeisme:
                 if id not in self.__pool:
                     s = Seisme()
                     s.id = id
-                    img = record.find("img")
-                    country = img.get('alt')
-                    s.country = country
                     s = self.__read_event(s)
                     self.__add(s)
             except IndexError as e:
@@ -133,6 +129,7 @@ class ScrapperSeisme:
         else:
             seisme.validation = True
         trs = event.find_all('tr')
+
         # 0 dateheure locale
 
         seisme.set_date_local(str(trs[0].getText()).split('\n')[2])
@@ -161,6 +158,24 @@ class ScrapperSeisme:
         seisme.type = str(trs[6].getText()).split('\n')[2]
         # 8: ville
         seisme.city = str(trs[8].getText()).split('\n')[1]
+        for e in range(8, 23):
+            infos = trs[e].getText().split()
+            near_city = infos[0]
+            near_city_country = trs[e].find("img").get("alt")
+            near_city_dist = int(infos[1])
+            near_city_population = int(infos[2])
+            seisme.add_near_city(near_city, near_city_country, near_city_dist, near_city_population)
+
+        mk = ''
+        mv = seisme.nearest_cities[list(seisme.nearest_cities)[0]][1]
+        for k in seisme.nearest_cities:
+            v = seisme.nearest_cities[k][1]
+            if v < mv:
+                mk = k
+                mv = v
+        seisme.city=mk
+        seisme.country=seisme.nearest_cities[mk][0]
+        seisme.distance=seisme.nearest_cities[mk][1]
         return seisme
 
     def __add(self, seisme):
@@ -208,3 +223,11 @@ class ScrapperSeisme:
             for s in self.__pool:
                 out.write(self.__pool[s].to_JSON() + ';\n')
         print(len(self.__pool))
+
+    # TOREM
+    def r(self, idevent):
+        s = Seisme()
+        s.id = idevent
+
+        re = self.__read_event(s)
+        print(re.to_JSON())
