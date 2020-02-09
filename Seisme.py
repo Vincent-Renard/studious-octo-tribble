@@ -1,7 +1,7 @@
 #! /usr/local/bin/pypy3
 # -*-coding:utf-8 -*
-from datetime import datetime, date, time
 import json
+from datetime import datetime, date, time
 
 
 def custom_converter(o):
@@ -22,7 +22,7 @@ class Seisme(object):
         self.date_time_UTC = date.today()
         self.city = ''
         self.country = ''
-        self.distance=0
+        self.distance = 0
         self.nearest_cities = {}
         self.longitude = 0.0
         self.latitude = 0.0
@@ -53,7 +53,7 @@ class Seisme(object):
         self.set_date_utc(payload["date_time_UTC"])
         self.city = payload["city"]
         self.country = payload["country"]
-        # self.nearest_cities={payload["nearest_cities"][c] for c in payload["nearest_cities"]}
+        self.nearest_cities = payload["nearest_cities"]
         self.longitude = float(payload["longitude"])
         self.latitude = float(payload["latitude"])
         self.depth = int(payload["depth"])
@@ -64,8 +64,8 @@ class Seisme(object):
         self.validation = payload["validation"]
         self.type = payload["type"]
 
-    def add_near_city(self,city,country, distance,pop):
-        self.nearest_cities[city] = (country ,distance,pop)
+    def add_near_city(self, city, country, distance, pop):
+        self.nearest_cities[city] = {"country": country, "distance": distance, "population": pop}
 
     def to_JSON(self):
         return json.dumps(self.__dict__, default=custom_converter, ensure_ascii=False, sort_keys=False, indent=4)

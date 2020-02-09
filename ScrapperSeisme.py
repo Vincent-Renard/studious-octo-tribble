@@ -1,34 +1,51 @@
 #! /usr/local/bin/pypy3
 # -*-coding:utf-8 -*
-from time import sleep
 
-import requests, threading
-from bs4 import BeautifulSoup
 from os import path
-from Seisme import Seisme
+
+import requests
+import threading
+from bs4 import BeautifulSoup
 from tqdm import tqdm
+
+from Seisme import Seisme
+
+SAVE_PATH_DEFAULT_NAME = "output.json"
 
 
 class ScrapperSeisme:
     """ScrapperSeisme : Scrapper for renass / seismes """
 
-    def __init__(self, base_url, nb_threads=4, save_path=None):
-        self.__base_url = base_url
+    def __init__(self, nb_threads=4, save_path=None):
+        self.__base_url = "https://renass.unistra.fr/les-derniers-seismes/page/"
+        self.__event_url = "https://renass.unistra.fr/evenements/"
         self.__nthreads = nb_threads
-        self.__save_path = save_path
         self.__pool = dict()
-
+        self.__len_pool_at_launch = 0
         if save_path is not None:
+            self.__save_path = save_path
             self.__deserialize()
 
+        else:
+            self.__save_path = SAVE_PATH_DEFAULT_NAME
+
     def __deserialize(self):
+
         if path.exists(self.__save_path):
             with open(self.__save_path, "r") as f_in:
                 f = f_in.read()
-                for seisme_serialized in f.split(';')[:-1]:
+                f = f[1:-1]
+                idx = 0
+                for seisme_serialized in f.split(',\n{'):
                     s = Seisme()
+                    if idx > 0:
+                        seisme_serialized = '{' + seisme_serialized
+
                     s.from_JSON(seisme_serialized)
+                    idx += 1
+
                     self.__pool[s.id] = s
+        self.__len_pool_at_launch = len(self.__pool)
 
     @staticmethod
     def __avg(list_elemts):
@@ -96,7 +113,6 @@ class ScrapperSeisme:
     def get_seisms(self, page):
         page = self.__base_url + str(page)
         content_page = self.__parse_content(page)
-        seismes = []
         trs = content_page.find_all('tr')
         for record in trs[1:]:
             try:
@@ -110,12 +126,9 @@ class ScrapperSeisme:
             except IndexError as e:
                 pass
 
-    @staticmethod
-    def __get_event(id):
+    def __get_event(self, id):
 
-        p = "https://renass.unistra.fr/evenements/" + id
-
-        requete = requests.get(p)
+        requete = requests.get(self.__event_url + id)
         cont = requete.content
         soup = BeautifulSoup(cont, features="html.parser")
 
@@ -159,28 +172,28 @@ class ScrapperSeisme:
         # 8: ville
         seisme.city = str(trs[8].getText()).split('\n')[1]
         for e in range(8, 23):
-            infos = trs[e].getText().split()
-            near_city = infos[0]
+            infos = trs[e].getText().split('\n')
+            near_city = infos[1].strip()
             near_city_country = trs[e].find("img").get("alt")
-            near_city_dist = int(infos[1])
-            near_city_population = int(infos[2])
+            near_city_dist = int(infos[2])
+            near_city_population = int(infos[3])
             seisme.add_near_city(near_city, near_city_country, near_city_dist, near_city_population)
 
-        mk = ''
-        mv = seisme.nearest_cities[list(seisme.nearest_cities)[0]][1]
+        # Sort cities by distance
+        mk = list(seisme.nearest_cities)[0]
+        mv = seisme.nearest_cities[mk]["distance"]
         for k in seisme.nearest_cities:
-            v = seisme.nearest_cities[k][1]
+            v = seisme.nearest_cities[k]["distance"]
             if v < mv:
                 mk = k
                 mv = v
-        seisme.city=mk
-        seisme.country=seisme.nearest_cities[mk][0]
-        seisme.distance=seisme.nearest_cities[mk][1]
+        seisme.city = mk
+        seisme.country = seisme.nearest_cities[mk]["country"]
+        seisme.distance = seisme.nearest_cities[mk]["distance"]
+
         return seisme
 
     def __add(self, seisme):
-        # print(type(seisme))
-        # print(seisme.id)
         self.__pool[seisme.id] = seisme
 
     def start(self, end_page=0, update=True):
@@ -188,8 +201,7 @@ class ScrapperSeisme:
         if not update: self.__pool = {}
         if end_page == 0:
             end_page = self.__find_first_page()
-            # end_page=1978
-            print(end_page)
+            print("end_page=", end_page)
         thrds = []
         for p in tqdm(range(1, end_page, self.__nthreads)):
             for t_i in range(self.__nthreads):
@@ -198,8 +210,8 @@ class ScrapperSeisme:
                 thrds.append(t)
             for th in thrds:
                 th.join()
-            self.__save()
             thrds.clear()
+        self.__save()
 
     def apply(self, fun):
         r = {}
@@ -219,15 +231,16 @@ class ScrapperSeisme:
 
     def __save(self):
         self.__sort__pool()
+        t = len(self.__pool)
+        i = 0
         with open(self.__save_path, "w") as out:
+            out.write('[')
             for s in self.__pool:
-                out.write(self.__pool[s].to_JSON() + ';\n')
-        print(len(self.__pool))
 
-    # TOREM
-    def r(self, idevent):
-        s = Seisme()
-        s.id = idevent
-
-        re = self.__read_event(s)
-        print(re.to_JSON())
+                out.write(self.__pool[s].to_JSON())
+                if i != t - 1:
+                    out.write(',\n')
+                else:
+                    out.write(']')
+                i += 1
+        print(t, "events stored ,", t - self.__len_pool_at_launch, "new")
