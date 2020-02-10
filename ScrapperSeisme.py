@@ -1,4 +1,4 @@
-#! /usr/local/bin/pypy3
+#! /usr/local/bin/python3
 # -*-coding:utf-8 -*
 
 from os import path
@@ -97,7 +97,6 @@ class ScrapperSeisme:
             end = end // 2
             r = self.__page_compare(val_in, val_out, url, p)
             i += 1
-
         return p
 
     def __get_weight_page(self, url, n):
@@ -196,7 +195,7 @@ class ScrapperSeisme:
     def __add(self, seisme):
         self.__pool[seisme.id] = seisme
 
-    def start(self, end_page=0, update=True):
+    def start(self, end_page=0, update=True,flush=False):
 
         if not update: self.__pool = {}
         if end_page == 0:
@@ -211,7 +210,11 @@ class ScrapperSeisme:
             for th in thrds:
                 th.join()
             thrds.clear()
-        self.__save()
+            if flush:
+                self.__save()
+        if not flush:
+            self.__save()
+        self.__end_message()
 
     def apply(self, fun):
         r = {}
@@ -243,4 +246,5 @@ class ScrapperSeisme:
                 else:
                     out.write(']')
                 i += 1
-        print(t, "events stored ,", t - self.__len_pool_at_launch, "new")
+    def __end_message(self):
+        print(len(self.__pool), "events stored ,", t - self.__len_pool_at_launch, "new")

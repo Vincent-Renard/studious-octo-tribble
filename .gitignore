@@ -134,3 +134,6 @@ dmypy.json
 .pyre/
 seismes.json
 seismes0.json
+
+/.idea/*
+output.json
