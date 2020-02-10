@@ -35,17 +35,18 @@ class ScrapperSeisme:
             with open(self.__save_path, "r") as f_in:
                 f = f_in.read()
                 f = f[1:-1]
+                #f=f[:-1]
                 idx = 0
                 for seisme_serialized in f.split(',\n{'):
                     s = Seisme()
                     if idx > 0:
                         seisme_serialized = '{' + seisme_serialized
-
                     s.from_JSON(seisme_serialized)
                     idx += 1
 
                     self.__pool[s.id] = s
         self.__len_pool_at_launch = len(self.__pool)
+        print(self.__len_pool_at_launch)
 
     @staticmethod
     def __avg(list_elemts):
@@ -124,7 +125,8 @@ class ScrapperSeisme:
                     self.__add(s)
             except IndexError as e:
                 pass
-
+            except requests.exceptions.ConnectionError as ec:
+                pass
     def __get_event(self, id):
 
         requete = requests.get(self.__event_url + id)
@@ -225,6 +227,9 @@ class ScrapperSeisme:
         self.__pool = r
         self.__save()
 
+    def apply_to_pool(self,f):
+
+        return f(self.__pool)
     def __sort__pool(self):
 
         newpool = sorted(self.__pool.values(), key=lambda x: x.date_time_UTC)
@@ -246,5 +251,7 @@ class ScrapperSeisme:
                 else:
                     out.write(']')
                 i += 1
+
     def __end_message(self):
-        print(len(self.__pool), "events stored ,", t - self.__len_pool_at_launch, "new")
+        t=len(self.__pool)
+        print(t, "events stored ,", t - self.__len_pool_at_launch, "new")
