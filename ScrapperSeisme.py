@@ -46,7 +46,6 @@ class ScrapperSeisme:
 
                     self.__pool[s.id] = s
         self.__len_pool_at_launch = len(self.__pool)
-        print(self.__len_pool_at_launch)
 
     @staticmethod
     def __avg(list_elemts):
@@ -125,8 +124,7 @@ class ScrapperSeisme:
                     self.__add(s)
             except IndexError as e:
                 pass
-            except requests.exceptions.ConnectionError as ec:
-                pass
+
     def __get_event(self, id):
 
         requete = requests.get(self.__event_url + id)
@@ -197,18 +195,24 @@ class ScrapperSeisme:
     def __add(self, seisme):
         self.__pool[seisme.id] = seisme
 
-    def start(self, end_page=0, update=True,flush=False):
+    def start(self,start_page=1, end_page=0, update=True,flush=False):
+
 
         if not update: self.__pool = {}
         if end_page == 0:
             end_page = self.__find_first_page()
             print("end_page=", end_page)
+
         thrds = []
-        for p in tqdm(range(1, end_page, self.__nthreads)):
+
+        for p in tqdm(range(start_page, end_page, self.__nthreads),unit="page"):
             for t_i in range(self.__nthreads):
-                t = threading.Thread(target=self.get_seisms, args=(p + t_i,))
-                t.start()
-                thrds.append(t)
+                try:
+                    t = threading.Thread(target=self.get_seisms, args=(p + t_i,))
+                    t.start()
+                    thrds.append(t)
+                except requests.exceptions.ConnectionError as ec:
+                    pass
             for th in thrds:
                 th.join()
             thrds.clear()
@@ -219,6 +223,8 @@ class ScrapperSeisme:
         self.__end_message()
 
     def apply(self, fun):
+
+
         r = {}
         for sid in self.__pool:
             s = self.__pool[sid]
@@ -228,7 +234,6 @@ class ScrapperSeisme:
         self.__save()
 
     def apply_to_pool(self,f):
-
         return f(self.__pool)
     def __sort__pool(self):
 
@@ -236,7 +241,6 @@ class ScrapperSeisme:
         self.__pool = {}
         for c in newpool:
             self.__add(c)
-
     def __save(self):
         self.__sort__pool()
         t = len(self.__pool)
