@@ -5,13 +5,14 @@ from os import path
 
 import requests
 import threading
+import csv
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 from Seisme import Seisme
 
 SAVE_PATH_DEFAULT_NAME = "output.json"
-
+CSV_DEFAULT_NAME = "output.csv"
 
 class ScrapperSeisme:
     """ScrapperSeisme : Scrapper for renass / seismes """
@@ -22,6 +23,7 @@ class ScrapperSeisme:
         self.__nthreads = nb_threads
         self.__pool = dict()
         self.__len_pool_at_launch = 0
+        self.__updating=True
         if save_path is not None:
             self.__save_path = save_path
             self.__deserialize()
@@ -117,7 +119,7 @@ class ScrapperSeisme:
             try:
                 m = record.find("a")
                 id = str(m).split('\"')[1].split('/')[2]
-                if id not in self.__pool:
+                if id not in self.__pool or (self.__updating and not self.__pool[id].validation) :
                     s = Seisme()
                     s.id = id
                     s = self.__read_event(s)
@@ -143,7 +145,6 @@ class ScrapperSeisme:
         trs = event.find_all('tr')
 
         # 0 dateheure locale
-
         seisme.set_date_local(str(trs[0].getText()).split('\n')[2])
         # 1 dateheure UTC
         seisme.set_date_utc(str(trs[1].getText()).split('\n')[2])
@@ -197,8 +198,9 @@ class ScrapperSeisme:
 
     def start(self,start_page=1, end_page=0, update=True,flush=False):
 
-
-        if not update: self.__pool = {}
+        self.__updating=update
+        if not self.__updating:
+            self.__pool = {}
         if end_page == 0:
             end_page = self.__find_first_page()
             print("end_page=", end_page)
@@ -241,6 +243,21 @@ class ScrapperSeisme:
         self.__pool = {}
         for c in newpool:
             self.__add(c)
+
+
+    def write_CSV(self,output_csv=""):
+        if output_csv =="":
+            output_csv=CSV_DEFAULT_NAME
+
+
+        with open(output_csv, 'w', newline='') as csvfile:
+            csv_wtr = csv.writer(csvfile, delimiter=',', quoting=csv.QUOTE_MINIMAL)
+            csv_wtr.writerow(["id","date_time_local","date_time_UTC","country","city","distance","longitude","latitude","depth","magnitude","magnitude_unit","validation","type"])
+            for sid in self.__pool:
+                s=self.__pool[sid]
+                csv_wtr.writerow([sid,s.date_time_local,s.date_time_UTC,s.country,s.city,s.distance,s.longitude,s.latitude,s.depth,s.magnitude,s.magnitude_unit,s.validation,s.type])
+
+
     def __save(self):
         self.__sort__pool()
         t = len(self.__pool)
