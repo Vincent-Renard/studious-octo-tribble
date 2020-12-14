@@ -2,17 +2,21 @@
 # -*-coding:utf-8 -*
 
 from os import path
-
+from fake_useragent import UserAgent
 import requests
 import threading
 import csv
 from bs4 import BeautifulSoup
 from tqdm import tqdm
+from json import load,dump
 
-from Seisme import Seisme
+from datetime import datetime
 
 SAVE_PATH_DEFAULT_NAME = "output.json"
 CSV_DEFAULT_NAME = "output.csv"
+
+
+
 
 class ScrapperSeisme:
     """ScrapperSeisme : Scrapper for renass / seismes """
@@ -30,23 +34,21 @@ class ScrapperSeisme:
 
         else:
             self.__save_path = SAVE_PATH_DEFAULT_NAME
+    @staticmethod
+    def __format_date(s):
+        s = s.split(' ')
+        d = s[0].split('/')
+        h = s[1].split(':')
+        date_s = datetime(int(d[2]), int(d[1]), int(
+            d[0]), int(h[0]), int(h[1]), int(h[2]))
+        return date_s.isoformat(sep=' ')
 
     def __deserialize(self):
 
         if path.exists(self.__save_path):
             with open(self.__save_path, "r") as f_in:
-                f = f_in.read()
-                f = f[1:-1]
-                #f=f[:-1]
-                idx = 0
-                for seisme_serialized in f.split(',\n{'):
-                    s = Seisme()
-                    if idx > 0:
-                        seisme_serialized = '{' + seisme_serialized
-                    s.from_JSON(seisme_serialized)
-                    idx += 1
-
-                    self.__pool[s.id] = s
+                
+                self.__pool=load(f_in)
         self.__len_pool_at_launch = len(self.__pool)
 
     @staticmethod
@@ -118,83 +120,95 @@ class ScrapperSeisme:
         for record in trs[1:]:
             try:
                 m = record.find("a")
-                id = str(m).split('\"')[1].split('/')[2]
-                if id not in self.__pool or (self.__updating and not self.__pool[id].validation) :
-                    s = Seisme()
-                    s.id = id
-                    s = self.__read_event(s)
-                    self.__add(s)
+                id_seisme = str(m).split('\"')[1].split('/')[2]
+                if id_seisme not in self.__pool or (self.__updating and not self.__pool[id_seisme]['validation']):
+                    seisme = {}
+                    seisme['id'] = id_seisme
+                    seisme = self.__read_event(seisme)
+                    self.__add(seisme)
             except IndexError as e:
                 pass
 
-    def __get_event(self, id):
+    def __get_event(self, id_seisme):
 
-        requete = requests.get(self.__event_url + id)
+        requete = requests.get(self.__event_url + id_seisme)
         cont = requete.content
         soup = BeautifulSoup(cont, features="html.parser")
 
         return soup
 
     def __read_event(self, seisme):
-        event = self.__get_event(seisme.id)
+        event = self.__get_event(seisme['id'])
         valid = event.find_all('div', {"class": "alert alert-error"})
         if len(valid) > 0:
-            seisme.validation = False
+            seisme['validation'] = False
         else:
-            seisme.validation = True
+            seisme['validation'] = True
         trs = event.find_all('tr')
 
         # 0 dateheure locale
-        seisme.set_date_local(str(trs[0].getText()).split('\n')[2])
+        
+        seisme['date_time_local'] = self.__format_date(
+            str(trs[0].getText()).split('\n')[2])
+
         # 1 dateheure UTC
-        seisme.set_date_utc(str(trs[1].getText()).split('\n')[2])
+        seisme['date_time_utc'] = self.__format_date(
+            str(trs[1].getText()).split('\n')[2])
         # 2 : latitude
-        la = str(trs[2].getText()).split('\n')[2][:-1]
-        la = float(la)
-        seisme.latitude = la
+        la = float(str(trs[2].getText()).split('\n')[2][:-1])
+        
+        seisme['latitude'] = la
         # 3 : longitude
-        lo = str(trs[3].getText()).split('\n')[2][:-1]
-        lo = float(lo)
-        seisme.longitude = lo
+        lo = float(str(trs[3].getText()).split('\n')[2][:-1])
+
+        seisme['longitude'] = lo
         # 4 : Profondeur
         pro1 = (str(trs[4].getText()).split('\n')[2])
         pro = pro1.split(' ')
-        val_depth = int(pro[0])
+        
+        seisme['depth']  = int(pro[0])
         # print(pro)
-        seisme.depth = val_depth
+
         # 5 : magnitude
         magnitude = str(trs[5].getText()).split('\n')[2]
         magnitude = magnitude.split('\xa0')
-        seisme.magnitude = magnitude[0]
-        seisme.magnitude_unit = magnitude[1]
+        seisme['magnitude'] = magnitude[0]
+        seisme['magnitude_unit'] = magnitude[1]
         # 6 : Type
-        seisme.type = str(trs[6].getText()).split('\n')[2]
+        seisme["type"] = str(trs[6].getText()).split('\n')[2]
         # 8: ville
-        seisme.city = str(trs[8].getText()).split('\n')[1]
+        seisme['city'] = str(trs[8].getText()).split('\n')[1]
+        
+        seisme["nearest_cities"]={}
         for e in range(8, 23):
             infos = trs[e].getText().split('\n')
             near_city = infos[1].strip()
             near_city_country = trs[e].find("img").get("alt")
             near_city_dist = int(infos[2])
             near_city_population = int(infos[3])
-            seisme.add_near_city(near_city, near_city_country, near_city_dist, near_city_population)
+            #seisme.add_near_city(near_city, near_city_country, near_city_dist, near_city_population)
+            seisme["nearest_cities"][near_city] = {
+                "country": near_city_country,
+                "distance": near_city_dist,
+                "population": near_city_population
+                }
 
         # Sort cities by distance
-        mk = list(seisme.nearest_cities)[0]
-        mv = seisme.nearest_cities[mk]["distance"]
-        for k in seisme.nearest_cities:
-            v = seisme.nearest_cities[k]["distance"]
-            if v < mv:
-                mk = k
-                mv = v
-        seisme.city = mk
-        seisme.country = seisme.nearest_cities[mk]["country"]
-        seisme.distance = seisme.nearest_cities[mk]["distance"]
+        nearest_city_name = list(seisme['nearest_cities'].keys())[0]
+        lowest_distance = seisme['nearest_cities'][nearest_city_name]["distance"]
+        for k,v in seisme['nearest_cities'].items():
+            current_distance = v['distance']
+            if current_distance < lowest_distance:
+                nearest_city_name = k
+                lowest_distance = current_distance
+        seisme['city'] = nearest_city_name
+        seisme['country'] = seisme['nearest_cities'][nearest_city_name]["country"]
+        seisme['distance'] = seisme['nearest_cities'][nearest_city_name]["distance"]
 
         return seisme
 
     def __add(self, seisme):
-        self.__pool[seisme.id] = seisme
+        self.__pool[seisme['id']] = seisme
 
     def start(self,start_page=1, end_page=0, update=True,flush=False):
 
@@ -239,7 +253,7 @@ class ScrapperSeisme:
         return f(self.__pool)
     def __sort__pool(self):
 
-        newpool = sorted(self.__pool.values(), key=lambda x: x.date_time_UTC)
+        newpool = sorted(self.__pool.values(), key=lambda x: x['date_time_utc'])
         self.__pool = {}
         for c in newpool:
             self.__add(c)
@@ -253,25 +267,20 @@ class ScrapperSeisme:
         with open(output_csv, 'w', newline='') as csvfile:
             csv_wtr = csv.writer(csvfile, delimiter=',', quoting=csv.QUOTE_MINIMAL)
             csv_wtr.writerow(["id","date_time_local","date_time_UTC","country","city","distance","longitude","latitude","depth","magnitude","magnitude_unit","validation","type"])
-            for sid in self.__pool:
+            for sid,s in self.__pool.items():
                 s=self.__pool[sid]
-                csv_wtr.writerow([sid,s.date_time_local,s.date_time_UTC,s.country,s.city,s.distance,s.longitude,s.latitude,s.depth,s.magnitude,s.magnitude_unit,s.validation,s.type])
+                csv_wtr.writerow([sid,s['date_time_local'],s['date_time_utc'],s['country'],s['city'],s['distance'],s['longitude'],s['latitude'],s['depth'],s['magnitude'],s['magnitude_unit'],s['validation'],s['type']])
 
 
     def __save(self):
         self.__sort__pool()
         t = len(self.__pool)
-        i = 0
-        with open(self.__save_path, "w") as out:
-            out.write('[')
-            for s in self.__pool:
 
-                out.write(self.__pool[s].to_JSON())
-                if i != t - 1:
-                    out.write(',\n')
-                else:
-                    out.write(']')
-                i += 1
+
+        with open(self.__save_path, "w") as out:
+
+            dump(self.__pool , out, ensure_ascii=False,
+                  sort_keys=False, indent=4)
 
     def __end_message(self):
         t=len(self.__pool)
